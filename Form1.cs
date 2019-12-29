@@ -17,6 +17,7 @@ namespace UsbTester
 {
     public partial class Form1 : Form
     {
+        bool m_useCallback = false;
         byte[] readBuffer = new byte[8];
         public static UsbDevice MyUsbDevice;
         UsbEndpointWriter writer;
@@ -27,7 +28,7 @@ namespace UsbTester
         {
             InitializeComponent();
 
-  
+            Control.CheckForIllegalCrossThreadCalls = false;
             UsbDeviceFinder MyUsbFinder = new UsbDeviceFinder(0x15A2, 0x007F);
 
             // Find and open the usb device.
@@ -43,9 +44,11 @@ namespace UsbTester
             }
 
             reader = MyUsbDevice.OpenEndpointReader(ReadEndpointID.Ep01);
-            //          reader.DataReceivedEnabled = true;
-            //        reader.DataReceived += (OnRxEndPointData);
-
+            if (m_useCallback == true)
+            {
+                reader.DataReceivedEnabled = true;
+                reader.DataReceived += (OnRxEndPointData);
+            }
 
             writer = MyUsbDevice.OpenEndpointWriter(WriteEndpointID.Ep02);
 
@@ -79,37 +82,52 @@ namespace UsbTester
                             }
                         }
                     }
-                }
-                
+                }                
             }
         }
 
         UsbEndpointReader reader;
+        Thread m_thread = null;
         private void button1_Click(object sender, EventArgs e)
         {
+            m_thread = new Thread(ReadWriteProcess);
+            m_thread.Start();
            
 
+        }
+        bool m_running = false;
+        void ReadWriteProcess()
+        {
             int bytesWritten;
-            ec = writer.Write(new byte[] { 0x12 , 0x33, 0x71, 0x41, 0x87, 0x98,0x88, 0x99 }, 2000, out bytesWritten); // specify data to send
 
-            if (ec != ErrorCode.None)
+            m_running = true;
+            int counter = 0;
+            while (m_running)
             {
-                MessageBox.Show("Write Error: " + UsbDevice.LastErrorString);
-                return;
-            }
-              
-            int bytesRead;
-            
-            ec = reader.Read(readBuffer, 500, out bytesRead);
-            if (ec != ErrorCode.None)
-            {
-                MessageBox.Show("Read error: " + UsbDevice.LastErrorString);
-                return;
-            } else
-            {
-                MessageBox.Show("Success read");
-            }
+                ec = writer.Write(new byte[] { 0x12, 0x33, 0x71, 0x41, 0x87, 0x98, 0x88, 0x99 }, 2000, out bytesWritten); // specify data to send
 
+                if (ec != ErrorCode.None)
+                {
+                    MessageBox.Show("Write Error: " + UsbDevice.LastErrorString);
+                    return;
+                }
+                if (m_useCallback == true)
+                    return;
+
+                int bytesRead;
+
+                ec = reader.Read(readBuffer, 500, out bytesRead);
+                if (ec != ErrorCode.None)
+                {
+                    MessageBox.Show("Read error: " + UsbDevice.LastErrorString);
+                    return;
+                }
+                else
+                {
+                    counter++;
+                    label1.Text = (8 * counter).ToString();
+                }
+            }
         }
         private void OnRxEndPointData(object sender, EndpointDataEventArgs e)
         {
@@ -119,6 +137,9 @@ namespace UsbTester
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
+            m_running = false;
+            if (m_thread != null)
+                m_thread.Join();
             MyUsbDevice.Close();
         }
     }
