@@ -18,7 +18,6 @@ namespace UsbTester
     public partial class Form1 : Form
     {
         bool m_useCallback = false;
-        byte[] readBuffer = new byte[8];
         public static UsbDevice MyUsbDevice;
         UsbEndpointWriter writer;
         ErrorCode ec = ErrorCode.None;
@@ -33,9 +32,9 @@ namespace UsbTester
 
             // Find and open the usb device.
             MyUsbDevice = UsbDevice.OpenUsbDevice(MyUsbFinder);
-              
+
             DumpAllDeviceDescriptors();
-             
+
             wholeUsbDevice = MyUsbDevice as IUsbDevice;
             if (!ReferenceEquals(wholeUsbDevice, null))
             {
@@ -52,9 +51,28 @@ namespace UsbTester
 
             writer = MyUsbDevice.OpenEndpointWriter(WriteEndpointID.Ep02);
 
+            outBuffer = new byte[m_maxPacketSize];
+            inBuffer = new byte[m_maxPacketSize];
 
+            label4.Text = m_maxPacketSize.ToString();
+
+            for (int i = 0; i < outBuffer.Length; i++)
+            {
+                outBuffer[i] = (byte)(0x22 + i);
+            }
+            outBuffer[0] = 0x12;
+            outBuffer[1] = 0x34;
+            outBuffer[2] = 0x56;
+            outBuffer[3] = 0x78;
+            outBuffer[4] = 0x90;
+            outBuffer[5] = 0xab;
+            outBuffer[6] = 0xcd;
+            outBuffer[7] = 0xef;
         }
 
+        byte[] outBuffer;
+        byte[] inBuffer;
+        int m_maxPacketSize = 8;
         void DumpAllDeviceDescriptors()
         {
             // Dump all devices and descriptor information to console output.
@@ -78,6 +96,7 @@ namespace UsbTester
                             ReadOnlyCollection<UsbEndpointInfo> endpointList = interfaceInfo.EndpointInfoList;
                             for (int iEndpoint = 0; iEndpoint < endpointList.Count; iEndpoint++)
                             {
+                                m_maxPacketSize = endpointList[iEndpoint].Descriptor.MaxPacketSize;
                                 textBox1.AppendText(endpointList[iEndpoint].ToString() + Environment.NewLine);
                             }
                         }
@@ -88,8 +107,11 @@ namespace UsbTester
 
         UsbEndpointReader reader;
         Thread m_thread = null;
+        bool m_readAndWrite = false;
         private void button1_Click(object sender, EventArgs e)
         {
+            m_readAndWrite = rbReadWrite.Checked;
+
             m_thread = new Thread(ReadWriteProcess);
             m_thread.Start();
            
@@ -104,7 +126,7 @@ namespace UsbTester
             int counter = 0;
             while (m_running)
             {
-                ec = writer.Write(new byte[] { 0x12, 0x33, 0x71, 0x41, 0x87, 0x98, 0x88, 0x99 }, 2000, out bytesWritten); // specify data to send
+                ec = writer.Write(outBuffer, 2000, out bytesWritten); // specify data to send
 
                 if (ec != ErrorCode.None)
                 {
@@ -115,8 +137,14 @@ namespace UsbTester
                     return;
 
                 int bytesRead;
+                if (m_readAndWrite == false)
+                {
+                    counter++;
+                    label1.Text = (m_maxPacketSize * counter).ToString();
+                    continue;
+                }
 
-                ec = reader.Read(readBuffer, 500, out bytesRead);
+                ec = reader.Read(inBuffer, 500, out bytesRead);
                 if (ec != ErrorCode.None)
                 {
                     MessageBox.Show("Read error: " + UsbDevice.LastErrorString);
@@ -125,7 +153,7 @@ namespace UsbTester
                 else
                 {
                     counter++;
-                    label1.Text = (8 * counter).ToString();
+                    label1.Text = (m_maxPacketSize * counter).ToString();
                 }
             }
         }
