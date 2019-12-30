@@ -42,6 +42,8 @@ namespace UsbTester
                 wholeUsbDevice.SetConfiguration(1);
             }
 
+            
+
             reader = MyUsbDevice.OpenEndpointReader(ReadEndpointID.Ep01);
             if (m_useCallback == true)
             {
@@ -114,7 +116,6 @@ namespace UsbTester
 
             m_thread = new Thread(ReadWriteProcess);
             m_thread.Start();
-           
 
         }
         bool m_running = false;
